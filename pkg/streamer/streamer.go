@@ -2,9 +2,9 @@ package streamer
 
 import (
 	"github.com/apoorvprecisely/envoy-poc/internal/hub"
-	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	endpointv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"google.golang.org/grpc"
 )
 
@@ -16,7 +16,7 @@ type DiscoveryStream interface {
 
 type Service struct {
 	hub     hub.Service
-	service endpointv2.Endpoint
+	service endpoint.Endpoint
 }
 
 //StreamAggregatedResources is a grpc streaming api for streaming Discovery responses
@@ -25,6 +25,6 @@ func (e *Service) StreamAggregatedResources(s discoverygrpc.AggregatedDiscoveryS
 	return NewSubscriptionStream(s, subscription, e.service, e.hub).Stream()
 }
 
-func New(hub hub.Service, service endpointv2.Endpoint) *Service {
+func New(hub hub.Service, service endpoint.Endpoint) *Service {
 	return &Service{hub: hub, service: service}
 }

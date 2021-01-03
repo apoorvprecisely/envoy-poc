@@ -4,7 +4,7 @@ import (
 	"log"
 	"sync"
 
-	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 
 	uuid "github.com/satori/go.uuid"
 )

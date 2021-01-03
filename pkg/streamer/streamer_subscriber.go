@@ -7,8 +7,8 @@ import (
 	"github.com/apoorvprecisely/envoy-poc/pkg/locator"
 
 	"github.com/apoorvprecisely/envoy-poc/internal/hub"
-	endpointv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
 type SubscriptionStream interface {
@@ -72,6 +72,9 @@ func (es *subscriptionStream) Stream() error {
 	<-terminate
 	return nil
 }
-func NewSubscriptionStream(stream discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer, subscription *hub.Subscription, service endpointv2.Endpoint, hub hub.Service) SubscriptionStream {
+func NewSubscriptionStream(stream discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer,
+	subscription *hub.Subscription,
+	service endpoint.Endpoint,
+	hub hub.Service) SubscriptionStream {
 	return &subscriptionStream{stream: stream, subscription: subscription, service: service, hub: hub}
 }

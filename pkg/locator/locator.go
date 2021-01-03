@@ -5,12 +5,14 @@ import (
 	"strings"
 	"time"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	"github.com/golang/protobuf/ptypes"
 
-	endpointv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	routev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 
-	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/unbxd/go-base/base/drivers"
 	"github.com/unbxd/go-base/base/drivers/zook"
 )
@@ -38,9 +40,9 @@ type (
 )
 
 type Service interface {
-	Clusters() ([]*discovery.Cluster, error)
-	Routes() ([]*discovery.RouteConfiguration, error)
-	CLA() ([]*discovery.ClusterLoadAssignment, error)
+	Clusters() ([]*cluster.Cluster, error)
+	Routes() ([]*route.RouteConfiguration, error)
+	CLA() ([]*endpoint.ClusterLoadAssignment, error)
 }
 
 const (
@@ -86,92 +88,29 @@ func (a agent) getCollectionLocations(collection string) ([]string, error) {
 	return locations, nil
 }
 
-func (a *agent) CLA() ([]*discovery.ClusterLoadAssignment, error) {
+func (a *agent) CLA() ([]*endpoint.ClusterLoadAssignment, error) {
 	aliasMap, err := a.getAliasMap()
 	if err != nil {
 		return nil, err
 	}
-	var cLAs []*discovery.ClusterLoadAssignment
+	var cLAs []*endpoint.ClusterLoadAssignment
 	for alias, collection := range aliasMap {
 		ep, err := a.getLbEndpoints(collection)
 		if err != nil {
 			return nil, err
 		}
-		cLAs = append(cLAs, &discovery.ClusterLoadAssignment{
+		cLAs = append(cLAs, &endpoint.ClusterLoadAssignment{
 			ClusterName: alias,
-			Policy: &discovery.ClusterLoadAssignment_Policy{
-				DropOverload: 0.0,
-			},
-			Endpoints: []endpointv2.LocalityLbEndpoints{
-				Locality: discovery.Locality{
-					Region: "test",
-				},
+			Endpoints: []*endpoint.LocalityLbEndpoints{{
 				LbEndpoints: ep,
-			},
+			}},
 		})
 	}
 	return cLAs, nil
 }
 
-func (a *agent) Clusters() ([]*discovery.Cluster, error) {
-	aliasMap, err := a.getAliasMap()
-	if err != nil {
-		return nil, err
-	}
-	var clusters []*discovery.Cluster
-	for alias := range aliasMap {
-		clusters = append(clusters, &discovery.Cluster{
-			Name:              alias,
-			Type:              discovery.Cluster_EDS,
-			ConnectTimeout:    1 * time.Second,
-			ProtocolSelection: discovery.Cluster_USE_DOWNSTREAM_PROTOCOL,
-			EdsClusterConfig: &discovery.Cluster_EdsClusterConfig{
-				EdsConfig: &core.ConfigSource{
-					ConfigSourceSpecifier: &core.ConfigSource_Ads{
-						Ads: &core.AggregatedConfigSource{},
-					},
-				},
-			},
-		})
-
-	}
-	return clusters, nil
-}
-
-func (a *agent) Routes() ([]*discovery.RouteConfiguration, error) {
-	aliasMap, err := a.getAliasMap()
-	if err != nil {
-		return nil, err
-	}
-	var routes []routev2.Route
-	for alias := range aliasMap {
-		routes = append(routes, routev2.Route{
-			Match: &routev2.RouteMatch{
-				PathSpecifier: &routev2.RouteMatch_Prefix{
-					Prefix: "/",
-				},
-			}, Action: &routev2.Route_Route{
-				Route: &routev2.RouteAction{
-					ClusterSpecifier: &routev2.RouteAction_Cluster{
-						Cluster: alias,
-					},
-				},
-			},
-		})
-	}
-	routeConfig := &discovery.RouteConfiguration{
-		Name: "local_route",
-		VirtualHosts: []routev2.VirtualHost{
-			Name:    "local_service",
-			Domains: []string{"*"},
-			Routes:  routes,
-		},
-	}
-	return []*discovery.RouteConfiguration{routeConfig}
-}
-
-func (a *agent) getLbEndpoints(collection string) ([]endpointv2.LbEndpoint, error) {
-	var hosts []endpointv2.LbEndpoint
+func (a *agent) getLbEndpoints(collection string) ([]*endpoint.LbEndpoint, error) {
+	var hosts []*endpoint.LbEndpoint
 	locations, err := a.getCollectionLocations(collection)
 	if err != nil {
 		return nil, err
@@ -182,21 +121,84 @@ func (a *agent) getLbEndpoints(collection string) ([]endpointv2.LbEndpoint, erro
 	return hosts, nil
 }
 
-func getLbEndpoint(host string) endpointv2.LbEndpoint {
-	return endpointv2.LbEndpoint{
-		HealthStatus: core.HealthStatus_HEALTHY,
-		Endpoint: &endpointv2.Endpoint{
-			Address: &core.Address{
-				Address: &core.Address_SocketAddress{
-					SocketAddress: &core.SocketAddress{
-						Protocol: core.TCP,
-						Address:  host,
-						PortSpecifier: &core.SocketAddress_PortValue{
-							PortValue: uint32(8983),
+func getLbEndpoint(host string) *endpoint.LbEndpoint {
+	return &endpoint.LbEndpoint{
+		HostIdentifier: &endpoint.LbEndpoint_Endpoint{
+			Endpoint: &endpoint.Endpoint{
+				Address: &core.Address{
+					Address: &core.Address_SocketAddress{
+						SocketAddress: &core.SocketAddress{
+							Protocol: core.SocketAddress_TCP,
+							Address:  host,
+							PortSpecifier: &core.SocketAddress_PortValue{
+								PortValue: 8983,
+							},
 						},
 					},
 				},
-			}}}
+			},
+		},
+	}
+}
+
+func (a *agent) Clusters() ([]*cluster.Cluster, error) {
+	aliasMap, err := a.getAliasMap()
+	if err != nil {
+		return nil, err
+	}
+	var clusters []*cluster.Cluster
+	for alias, collection := range aliasMap {
+		ep, err := a.getLbEndpoints(collection)
+		if err != nil {
+			return nil, err
+		}
+		clusters = append(clusters, &cluster.Cluster{
+			Name:                 alias,
+			ConnectTimeout:       ptypes.DurationProto(5 * time.Second),
+			ClusterDiscoveryType: &cluster.Cluster_Type{Type: cluster.Cluster_LOGICAL_DNS},
+			LbPolicy:             cluster.Cluster_ROUND_ROBIN,
+			LoadAssignment: &endpoint.ClusterLoadAssignment{
+				ClusterName: alias,
+				Endpoints: []*endpoint.LocalityLbEndpoints{
+					LbEndpoints: ep,
+				},
+			},
+			DnsLookupFamily: cluster.Cluster_V4_ONLY,
+		})
+	}
+	return clusters, nil
+}
+
+func (a *agent) Routes() ([]*discovery.RouteConfiguration, error) {
+	aliasMap, err := a.getAliasMap()
+	if err != nil {
+		return nil, err
+	}
+	var routes []route.Route
+	for alias := range aliasMap {
+		routes = append(routes, route.Route{
+			Match: &route.RouteMatch{
+				PathSpecifier: &route.RouteMatch_Prefix{
+					Prefix: "/",
+				},
+			}, Action: &route.Route_Route{
+				Route: &route.RouteAction{
+					ClusterSpecifier: &route.RouteAction_Cluster{
+						Cluster: alias,
+					},
+				},
+			},
+		})
+	}
+	routeConfig := &discovery.RouteConfiguration{
+		Name: "local_route",
+		VirtualHosts: []route.VirtualHost{
+			Name:    "local_service",
+			Domains: []string{"*"},
+			Routes:  routes,
+		},
+	}
+	return []*discovery.RouteConfiguration{routeConfig}
 }
 
 func NewLocator() (Service, error) {

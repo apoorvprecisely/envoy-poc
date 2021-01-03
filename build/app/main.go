@@ -14,9 +14,15 @@ import (
 	"github.com/unbxd/go-base/base/log"
 	gb_log "github.com/unbxd/go-base/base/log"
 	"github.com/unbxd/go-base/base/transport/zk"
-
+	clusterservice "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
+	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	endpointservice "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
+	listenerservice "github.com/envoyproxy/go-control-plane/envoy/service/listener/v3"
+	routeservice "github.com/envoyproxy/go-control-plane/envoy/service/route/v3"
+	runtimeservice "github.com/envoyproxy/go-control-plane/envoy/service/runtime/v3"
+	secretservice "github.com/envoyproxy/go-control-plane/envoy/service/secret/v3"
+	serverv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/apoorvprecisely/envoy-poc/internal/hub"
-	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 
 	"google.golang.org/grpc"
 )
@@ -56,14 +62,24 @@ func main() {
 	if err != nil {
 		return err
 	}
+	//register services
 	server = grpc.NewServer()
+	
 	discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, streamer.New(hub, loc))
+	// endpointservice.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
+	// clusterservice.RegisterClusterDiscoveryServiceServer(grpcServer, server)
+	// routeservice.RegisterRouteDiscoveryServiceServer(grpcServer, server)
+	// listenerservice.RegisterListenerDiscoveryServiceServer(grpcServer, server)
+	// secretservice.RegisterSecretDiscoveryServiceServer(grpcServer, server)
+	// runtimeservice.RegisterRuntimeDiscoveryServiceServer(grpcServer, server)
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port()))
 	if err != nil {
 		log.Fatalf("failed to listen: %v\n", err)
 	}
 	server.Serve(lis)
 }
+
 func createPubEP(hub hub.Service,loc locator.Service) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
 		hub.Publish(&pubsub.Event{CLA: locator.CLA(), Clusters: locator.Clusters(), Routes: locator.Routes())

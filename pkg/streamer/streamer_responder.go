@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/gogo/protobuf/types"
 	"google.golang.org/protobuf/proto"
 )

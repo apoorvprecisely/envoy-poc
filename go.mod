@@ -6,6 +6,7 @@ require (
 	github.com/envoyproxy/go-control-plane v0.9.7
 	github.com/go-kit/kit v0.9.0
 	github.com/gogo/protobuf v1.1.1
+	github.com/golang/protobuf v1.4.2
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/unbxd/go-base v0.0.5-0.20201208091532-9cf135540ac2
