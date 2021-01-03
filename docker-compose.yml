@@ -1,0 +1,52 @@
+version: "3.5"
+services:
+  solr1:
+    image: solr:6.6.6
+    user: root
+    ports:
+      - "8983:8983"
+    links:
+      - zook1
+    volumes:
+      - ./scripts/wait-for-it.sh:/usr/bin/wait-for-it.sh
+    command: >
+      bash -c '/usr/bin/wait-for-it.sh -h zook1 -p 2181 -t 0; server/scripts/cloud-scripts/zkcli.sh -z zook1:2181/solr -cmd bootstrap -solrhome /opt/solr/server/solr
+      && /opt/solr/bin/solr -c -f -z zook1:2181/solr -Dhost=solr1 -force'
+    depends_on:
+      - zook1
+  solr2:
+    image: solr:6.6.6
+    user: root
+    ports:
+      - "8984:8983"
+    links:
+      - zook1
+    volumes:
+      - ./scripts/wait-for-it.sh:/usr/bin/wait-for-it.sh
+    command: >
+      bash -c '/usr/bin/wait-for-it.sh -h zook1 -p 2181 -t 0; server/scripts/cloud-scripts/zkcli.sh -z zook1:2181/solr -cmd bootstrap -solrhome /opt/solr/server/solr
+      && /opt/solr/bin/solr -c -f -z zook1:2181/solr -Dhost=solr2 -force'
+    depends_on:
+      - zook1
+  zook1:
+    image: jplock/zookeeper:3.4.10
+    ports:
+      - "2181:2181"
+  envoy:
+    image: envoyproxy/envoy:v1.7.0
+    command: "envoy -c /etc/envoy/envoy-xds.yaml"
+    volumes:
+      - ./envoy-xds.yaml:/etc/envoy/envoy-xds.yaml
+    expose:
+      - "8443"
+      - "9000"
+    ports:
+      - "8443:8443"
+      - "9000:9000"    
+  consul-xds:
+    build:
+      context: .
+    expose:
+      - "8053"
+    ports:
+      - "8053:8053"

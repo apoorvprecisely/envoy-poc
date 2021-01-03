@@ -1,0 +1,212 @@
+package locator
+
+import (
+	"encoding/json"
+	"strings"
+	"time"
+
+	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+
+	endpointv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	routev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+
+	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	"github.com/unbxd/go-base/base/drivers"
+	"github.com/unbxd/go-base/base/drivers/zook"
+)
+
+type (
+	Collection struct {
+		Shards            map[string]*Shard `mapstructure:"shards"`
+		ReplicationFactor string            `mapstructure:"replicationFactor"`
+	}
+
+	Shard struct {
+		Name     string              `mapstructure:"name"`
+		Range    string              `mapstructure:"range"`
+		State    string              `mapstructure:"state"`
+		Replicas map[string]*Replica `mapstructure:"replicas"`
+	}
+
+	Replica struct {
+		Core     string `mapstructure:"core"`
+		Leader   string `mapstructure:"leader"`
+		BaseUrl  string `mapstructure:"base_url"`
+		NodeName string `mapstructure:"node_name"`
+		State    string `mapstructure:"state"`
+	}
+)
+
+type Service interface {
+	Clusters() ([]*discovery.Cluster, error)
+	Routes() ([]*discovery.RouteConfiguration, error)
+	CLA() ([]*discovery.ClusterLoadAssignment, error)
+}
+
+const (
+	regexPathIdentifier = "%regex:"
+)
+
+type agent struct {
+	driver            drivers.Driver
+	enableHealthCheck bool
+}
+
+//Helper functions
+func (a agent) getAliasMap() (map[string]string, error) {
+	bt, err := a.driver.Read("/solr/aliases.json")
+	if err != nil {
+		return nil, err
+	}
+	var al map[string]map[string]string
+	err = json.Unmarshal(bt, &al)
+	if err != nil {
+		return nil, err
+	}
+	c, ok := al["collection"]
+	if !ok {
+		return make(map[string]string), nil
+	}
+	return c, nil
+}
+func (a agent) getCollectionLocations(collection string) ([]string, error) {
+	bt, err := a.driver.Read("/solr/collections/" + collection + "/state.json")
+	if err != nil {
+		return nil, err
+	}
+	var mm map[string]Collection
+	err = json.Unmarshal(bt, &mm)
+	if err != nil {
+		return nil, err
+	}
+	var locations []string
+	for _, v := range mm[collection].Shards["shard1"].Replicas {
+		locations = append(locations, strings.Trim(strings.Trim(v.BaseUrl, ":8983/solr"), "http://"))
+	}
+	return locations, nil
+}
+
+func (a *agent) CLA() ([]*discovery.ClusterLoadAssignment, error) {
+	aliasMap, err := a.getAliasMap()
+	if err != nil {
+		return nil, err
+	}
+	var cLAs []*discovery.ClusterLoadAssignment
+	for alias, collection := range aliasMap {
+		ep, err := a.getLbEndpoints(collection)
+		if err != nil {
+			return nil, err
+		}
+		cLAs = append(cLAs, &discovery.ClusterLoadAssignment{
+			ClusterName: alias,
+			Policy: &discovery.ClusterLoadAssignment_Policy{
+				DropOverload: 0.0,
+			},
+			Endpoints: []endpointv2.LocalityLbEndpoints{
+				Locality: discovery.Locality{
+					Region: "test",
+				},
+				LbEndpoints: ep,
+			},
+		})
+	}
+	return cLAs, nil
+}
+
+func (a *agent) Clusters() ([]*discovery.Cluster, error) {
+	aliasMap, err := a.getAliasMap()
+	if err != nil {
+		return nil, err
+	}
+	var clusters []*discovery.Cluster
+	for alias := range aliasMap {
+		clusters = append(clusters, &discovery.Cluster{
+			Name:              alias,
+			Type:              discovery.Cluster_EDS,
+			ConnectTimeout:    1 * time.Second,
+			ProtocolSelection: discovery.Cluster_USE_DOWNSTREAM_PROTOCOL,
+			EdsClusterConfig: &discovery.Cluster_EdsClusterConfig{
+				EdsConfig: &core.ConfigSource{
+					ConfigSourceSpecifier: &core.ConfigSource_Ads{
+						Ads: &core.AggregatedConfigSource{},
+					},
+				},
+			},
+		})
+
+	}
+	return clusters, nil
+}
+
+func (a *agent) Routes() ([]*discovery.RouteConfiguration, error) {
+	aliasMap, err := a.getAliasMap()
+	if err != nil {
+		return nil, err
+	}
+	var routes []routev2.Route
+	for alias := range aliasMap {
+		routes = append(routes, routev2.Route{
+			Match: &routev2.RouteMatch{
+				PathSpecifier: &routev2.RouteMatch_Prefix{
+					Prefix: "/",
+				},
+			}, Action: &routev2.Route_Route{
+				Route: &routev2.RouteAction{
+					ClusterSpecifier: &routev2.RouteAction_Cluster{
+						Cluster: alias,
+					},
+				},
+			},
+		})
+	}
+	routeConfig := &discovery.RouteConfiguration{
+		Name: "local_route",
+		VirtualHosts: []routev2.VirtualHost{
+			Name:    "local_service",
+			Domains: []string{"*"},
+			Routes:  routes,
+		},
+	}
+	return []*discovery.RouteConfiguration{routeConfig}
+}
+
+func (a *agent) getLbEndpoints(collection string) ([]endpointv2.LbEndpoint, error) {
+	var hosts []endpointv2.LbEndpoint
+	locations, err := a.getCollectionLocations(collection)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range locations {
+		hosts = append(hosts, getLbEndpoint(s))
+	}
+	return hosts, nil
+}
+
+func getLbEndpoint(host string) endpointv2.LbEndpoint {
+	return endpointv2.LbEndpoint{
+		HealthStatus: core.HealthStatus_HEALTHY,
+		Endpoint: &endpointv2.Endpoint{
+			Address: &core.Address{
+				Address: &core.Address_SocketAddress{
+					SocketAddress: &core.SocketAddress{
+						Protocol: core.TCP,
+						Address:  host,
+						PortSpecifier: &core.SocketAddress_PortValue{
+							PortValue: uint32(8983),
+						},
+					},
+				},
+			}}}
+}
+
+func NewLocator() (Service, error) {
+	zkD := zook.NewZKDriver([]string{"zook1:2181"}, time.Duration(2000)*time.Millisecond, "/solr")
+	err := zkD.Open()
+	if err != nil {
+		return nil, err
+	}
+	return &agent{
+		driver:            zkD,
+		enableHealthCheck: false,
+	}, nil
+}
