@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	con, err := zk.NewConsumer(logger, "/solr/aliases.json", []zk.ConsumerOption{
+	_, err = zk.NewConsumer(logger, "/solr/aliases.json", []zk.ConsumerOption{
 		zk.WithZkDriver(zkD),
 		zk.WithEndpointConsumerOption(createPubEP(hub, loc)),
 		zk.WithReconnectOnErrConsumerOption(func(err error) bool {
