@@ -5,12 +5,10 @@ import (
 	"strings"
 	"time"
 
+	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-
 	endpointv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	routev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-
-	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/unbxd/go-base/base/drivers"
 	"github.com/unbxd/go-base/base/drivers/zook"
 )
@@ -99,18 +97,21 @@ func (a *agent) CLA() ([]*discovery.ClusterLoadAssignment, error) {
 		}
 		cLAs = append(cLAs, &discovery.ClusterLoadAssignment{
 			ClusterName: alias,
-			Policy: &discovery.ClusterLoadAssignment_Policy{
-				DropOverload: 0.0,
-			},
-			Endpoints: []endpointv2.LocalityLbEndpoints{
-				Locality: discovery.Locality{
-					Region: "test",
-				},
+			Policy:      &discovery.ClusterLoadAssignment_Policy{},
+			Endpoints: []*endpointv2.LocalityLbEndpoints{{
+				Locality:    a.Locality(),
 				LbEndpoints: ep,
-			},
+			}},
 		})
 	}
 	return cLAs, nil
+}
+
+//Locality translates Agent info to envoy control plane locality
+func (a *agent) Locality() *core.Locality {
+	return &core.Locality{
+		Region: "test",
+	}
 }
 
 func (a *agent) Clusters() ([]*discovery.Cluster, error) {
@@ -122,8 +123,6 @@ func (a *agent) Clusters() ([]*discovery.Cluster, error) {
 	for alias := range aliasMap {
 		clusters = append(clusters, &discovery.Cluster{
 			Name:              alias,
-			Type:              discovery.Cluster_EDS,
-			ConnectTimeout:    1 * time.Second,
 			ProtocolSelection: discovery.Cluster_USE_DOWNSTREAM_PROTOCOL,
 			EdsClusterConfig: &discovery.Cluster_EdsClusterConfig{
 				EdsConfig: &core.ConfigSource{
@@ -143,9 +142,9 @@ func (a *agent) Routes() ([]*discovery.RouteConfiguration, error) {
 	if err != nil {
 		return nil, err
 	}
-	var routes []routev2.Route
+	var routes []*routev2.Route
 	for alias := range aliasMap {
-		routes = append(routes, routev2.Route{
+		routes = append(routes, &routev2.Route{
 			Match: &routev2.RouteMatch{
 				PathSpecifier: &routev2.RouteMatch_Prefix{
 					Prefix: "/",
@@ -161,17 +160,17 @@ func (a *agent) Routes() ([]*discovery.RouteConfiguration, error) {
 	}
 	routeConfig := &discovery.RouteConfiguration{
 		Name: "local_route",
-		VirtualHosts: []routev2.VirtualHost{
+		VirtualHosts: []*routev2.VirtualHost{{
 			Name:    "local_service",
 			Domains: []string{"*"},
 			Routes:  routes,
-		},
+		}},
 	}
-	return []*discovery.RouteConfiguration{routeConfig}
+	return []*discovery.RouteConfiguration{routeConfig}, nil
 }
 
-func (a *agent) getLbEndpoints(collection string) ([]endpointv2.LbEndpoint, error) {
-	var hosts []endpointv2.LbEndpoint
+func (a *agent) getLbEndpoints(collection string) ([]*endpointv2.LbEndpoint, error) {
+	var hosts []*endpointv2.LbEndpoint
 	locations, err := a.getCollectionLocations(collection)
 	if err != nil {
 		return nil, err
@@ -182,14 +181,14 @@ func (a *agent) getLbEndpoints(collection string) ([]endpointv2.LbEndpoint, erro
 	return hosts, nil
 }
 
-func getLbEndpoint(host string) endpointv2.LbEndpoint {
-	return endpointv2.LbEndpoint{
+func getLbEndpoint(host string) *endpointv2.LbEndpoint {
+	return &endpointv2.LbEndpoint{
 		HealthStatus: core.HealthStatus_HEALTHY,
 		Endpoint: &endpointv2.Endpoint{
 			Address: &core.Address{
 				Address: &core.Address_SocketAddress{
 					SocketAddress: &core.SocketAddress{
-						Protocol: core.TCP,
+						Protocol: core.SocketAddress_TCP,
 						Address:  host,
 						PortSpecifier: &core.SocketAddress_PortValue{
 							PortValue: uint32(8983),
