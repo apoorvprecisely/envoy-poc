@@ -7,7 +7,6 @@ import (
 	"github.com/apoorvprecisely/envoy-poc/pkg/locator"
 
 	"github.com/apoorvprecisely/envoy-poc/internal/hub"
-	endpointv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 )
 
@@ -36,7 +35,22 @@ func (es *subscriptionStream) Stream() error {
 			} else if in.VersionInfo == "" {
 				log.Printf("received discovery request on stream: %v", in)
 				// request being written, how no clue,based on this a DiscoveryResponse is being written
-				es.hub.Publish(&hub.Event{CLA: es.service.CLA(), Clusters: es.service.Clusters(), Routes: es.service.Routes()})
+				cla, err := es.locator.CLA()
+				if err != nil {
+					log.Printf("failed to decode locator values : %v", err)
+					return
+				}
+				clusters, err := es.locator.Clusters()
+				if err != nil {
+					log.Printf("failed to decode locator values : %v", err)
+					return
+				}
+				routes, err := es.locator.Routes()
+				if err != nil {
+					log.Printf("failed to decode locator values : %v", err)
+					return
+				}
+				es.hub.Publish(&hub.Event{CLA: cla, Clusters: clusters, Routes: routes})
 			} else {
 				log.Printf("received ACK on stream: %v", in)
 			}
@@ -72,6 +86,10 @@ func (es *subscriptionStream) Stream() error {
 	<-terminate
 	return nil
 }
-func NewSubscriptionStream(stream discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer, subscription *hub.Subscription, service endpointv2.Endpoint, hub hub.Service) SubscriptionStream {
-	return &subscriptionStream{stream: stream, subscription: subscription, service: service, hub: hub}
+func NewSubscriptionStream(
+	stream discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer,
+	subscription *hub.Subscription,
+	service locator.Service,
+	hub hub.Service) SubscriptionStream {
+	return &subscriptionStream{stream: stream, subscription: subscription, locator: service, hub: hub}
 }

@@ -9,9 +9,9 @@ import (
 
 	"github.com/apoorvprecisely/envoy-poc/pkg/locator"
 	"github.com/apoorvprecisely/envoy-poc/pkg/streamer"
-	"github.com/go-kit/kit/endpoint"
+	sam_zk "github.com/samuel/go-zookeeper/zk"
 	"github.com/unbxd/go-base/base/drivers/zook"
-	"github.com/unbxd/go-base/base/log"
+	"github.com/unbxd/go-base/base/endpoint"
 	gb_log "github.com/unbxd/go-base/base/log"
 	"github.com/unbxd/go-base/base/transport/zk"
 
@@ -25,21 +25,24 @@ var server *grpc.Server
 
 func main() {
 	logger, err := gb_log.NewZapLogger(
-		log.ZapWithLevel("error"),
-		log.ZapWithEncoding("console"),
-		log.ZapWithOutput("stdout"),
+		gb_log.ZapWithLevel("error"),
+		gb_log.ZapWithEncoding("console"),
+		gb_log.ZapWithOutput([]string{"stdout"}),
 	)
 	hub := hub.NewHub()
-	loc := locator.NewLocator()
+	loc, err := locator.NewLocator()
+	if err != nil {
+		panic(err)
+	}
 	//add watch
 	zkD := zook.NewZKDriver([]string{"zook1:2181"}, time.Duration(2000)*time.Millisecond, "/solr")
-	err := zkD.Open()
+	err = zkD.Open()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	con, err := zk.NewConsumer(z.logger, "/solr/aliases.json", []zk.ConsumerOption{
+	con, err := zk.NewConsumer(logger, "/solr/aliases.json", []zk.ConsumerOption{
 		zk.WithZkDriver(zkD),
-		zk.WithEndpointConsumerOption(createPubEP(hub,loc)),
+		zk.WithEndpointConsumerOption(createPubEP(hub, loc)),
 		zk.WithReconnectOnErrConsumerOption(func(err error) bool {
 			if err == sam_zk.ErrNoNode {
 				return false
@@ -51,22 +54,37 @@ func main() {
 				return 1 * time.Second
 			}
 			return 0
-		})})
+		})}...)
 
 	if err != nil {
-		return err
+		panic(err)
 	}
 	server = grpc.NewServer()
 	discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, streamer.New(hub, loc))
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port()))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", 8053))
 	if err != nil {
 		log.Fatalf("failed to listen: %v\n", err)
 	}
 	server.Serve(lis)
 }
-func createPubEP(hub hub.Service,loc locator.Service) endpoint.Endpoint {
+func createPubEP(hubService hub.Service, locator locator.Service) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
-		hub.Publish(&pubsub.Event{CLA: locator.CLA(), Clusters: locator.Clusters(), Routes: locator.Routes())
+		cla, err := locator.CLA()
+		if err != nil {
+			log.Printf("failed to decode locator values : %v", err)
+			return nil, err
+		}
+		clusters, err := locator.Clusters()
+		if err != nil {
+			log.Printf("failed to decode locator values : %v", err)
+			return nil, err
+		}
+		routes, err := locator.Routes()
+		if err != nil {
+			log.Printf("failed to decode locator values : %v", err)
+			return nil, err
+		}
+		hubService.Publish(&hub.Event{CLA: cla, Clusters: clusters, Routes: routes})
 		if err != nil {
 			return nil, err
 		}

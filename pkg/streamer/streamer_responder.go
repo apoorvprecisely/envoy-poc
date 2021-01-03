@@ -7,7 +7,7 @@ import (
 
 	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/ptypes/any"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -35,20 +35,20 @@ type responseStream struct {
 	version int64
 }
 
-func (streamer *responseStream) SendEDS(cLAList []*cp.ClusterLoadAssignment) error {
-	var resources []types.Any
+func (streamer *responseStream) SendEDS(cLAList []*discovery.ClusterLoadAssignment) error {
+	var resources []*any.Any
 	for _, cLA := range cLAList {
 		data, err := proto.Marshal(cLA)
 		if err != nil {
 			return err
 		}
-		resources = append(resources, types.Any{
+		resources = append(resources, &any.Any{
 			TypeUrl: "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment",
 			Value:   data,
 		})
 	}
 
-	resp := &cp.DiscoveryResponse{
+	resp := &discovery.DiscoveryResponse{
 		VersionInfo: strconv.FormatInt(int64(streamer.version), 10),
 		Resources:   resources,
 		TypeUrl:     "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment",
@@ -61,23 +61,23 @@ func (streamer *responseStream) SendEDS(cLAList []*cp.ClusterLoadAssignment) err
 	return nil
 }
 
-func (streamer *responseStream) SendCDS(clusters []*cp.Cluster) error {
+func (streamer *responseStream) SendCDS(clusters []*discovery.Cluster) error {
 	if len(clusters) == 0 {
 		return nil
 	}
-	var resources []types.Any
+	var resources []*any.Any
 	for _, cluster := range clusters {
 		data, err := proto.Marshal(cluster)
 		if err != nil {
 			return err
 		}
-		resources = append(resources, types.Any{
+		resources = append(resources, &any.Any{
 			TypeUrl: "type.googleapis.com/envoy.api.v2.Cluster",
 			Value:   data,
 		})
 	}
 
-	resp := &cp.DiscoveryResponse{
+	resp := &discovery.DiscoveryResponse{
 		VersionInfo: strconv.FormatInt(int64(streamer.version), 10),
 		Resources:   resources,
 		TypeUrl:     "type.googleapis.com/envoy.api.v2.Cluster",
@@ -90,23 +90,23 @@ func (streamer *responseStream) SendCDS(clusters []*cp.Cluster) error {
 	return nil
 }
 
-func (streamer *responseStream) SendRDS(routeConfig []*cp.RouteConfiguration) error {
+func (streamer *responseStream) SendRDS(routeConfig []*discovery.RouteConfiguration) error {
 	if len(routeConfig) == 0 {
 		return nil
 	}
-	var resources []types.Any
+	var resources []*any.Any
 	for _, route := range routeConfig {
 		data, err := proto.Marshal(route)
 		if err != nil {
 			return err
 		}
-		resources = append(resources, types.Any{
+		resources = append(resources, &any.Any{
 			TypeUrl: "type.googleapis.com/envoy.api.v2.RouteConfiguration",
 			Value:   data,
 		})
 	}
 
-	resp := &cp.DiscoveryResponse{
+	resp := &discovery.DiscoveryResponse{
 		VersionInfo: strconv.FormatInt(int64(streamer.version), 10),
 		Resources:   resources,
 		TypeUrl:     "type.googleapis.com/envoy.api.v2.RouteConfiguration",

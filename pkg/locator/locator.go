@@ -184,8 +184,8 @@ func (a *agent) getLbEndpoints(collection string) ([]*endpointv2.LbEndpoint, err
 func getLbEndpoint(host string) *endpointv2.LbEndpoint {
 	return &endpointv2.LbEndpoint{
 		HealthStatus: core.HealthStatus_HEALTHY,
-		Endpoint: &endpointv2.Endpoint{
-			Address: &core.Address{
+		HostIdentifier: &endpointv2.LbEndpoint_Endpoint{
+			Endpoint: &endpointv2.Endpoint{Address: &core.Address{
 				Address: &core.Address_SocketAddress{
 					SocketAddress: &core.SocketAddress{
 						Protocol: core.SocketAddress_TCP,
@@ -195,7 +195,7 @@ func getLbEndpoint(host string) *endpointv2.LbEndpoint {
 						},
 					},
 				},
-			}}}
+			}}}}
 }
 
 func NewLocator() (Service, error) {
