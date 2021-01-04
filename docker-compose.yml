@@ -42,7 +42,9 @@ services:
       - "9000"
     ports:
       - "8443:8443"
-      - "9000:9000"    
+      - "9000:9000"  
+    depends_on:
+      - consul-xds  
   consul-xds:
     build:
       context: .
@@ -50,3 +52,7 @@ services:
       - "8053"
     ports:
       - "8053:8053"
+    volumes:
+      - ./scripts/wait-for-it.sh:/usr/bin/wait-for-it.sh
+    depends_on:
+      - zook1
