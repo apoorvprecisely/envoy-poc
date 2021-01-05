@@ -7,21 +7,14 @@ services:
     networks:
       - banshee
     image: envoyproxy/envoy:v1.16.2
-    command: "envoy -c /etc/envoy/envoy-xds.yaml --service-cluster 'front-envoy' --service-node 'front-envoy'"
+    command: "envoy -c /etc/envoy/envoy-xds.yaml"
     volumes:
       - ../envoy-xds.yaml:/etc/envoy/envoy-xds.yaml
     expose:
       - "8443"
       - "9000"
+      - "9003"
     ports:
       - "8443:8443"
       - "9000:9000"  
-  greeter:
-    networks:
-      - banshee
-    image: "gojektech/grpc-greeter"
-    hostname: "greeter"
-    expose:
-      - "8443"
-    ports:
-      - "8444:8443"
+      - "9003:9003"  

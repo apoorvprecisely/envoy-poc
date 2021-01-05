@@ -126,20 +126,24 @@ func (a *agent) Routes() ([]*route.RouteConfiguration, error) {
 		return nil, err
 	}
 	var routes []string
+	var routesC []*route.RouteConfiguration
 	for alias := range aliasMap {
 		routes = append(routes, alias)
 	}
-	return []*route.RouteConfiguration{MakeRoute(routes)}, nil
+	routesC = append(routesC, MakeRoute(routes))
+	return routesC, nil
 }
+
+/*
+[2021-01-06 01:15:27.495][1424213][warning][config] [source/common/config/grpc_subscription_impl.cc:107] gRPC config for type.googleapis.com/envoy.config.listener.v3.Listener rejected: Error adding/updating listener(s) test_read: envoy.config.core.v3.ApiConfigSource must have a statically defined non-EDS cluster: 'test_read' does not exist, was added via api, or is an EDS cluster
+test_write: envoy.config.core.v3.ApiConfigSource must have a statically defined non-EDS cluster: 'test_write' does not exist, was added via api, or is an EDS cluster
+
+*/
 func (a *agent) Listeners() ([]*listener.Listener, error) {
-	aliasMap, err := a.getAliasMap()
-	if err != nil {
-		return nil, err
-	}
 	var listeners []*listener.Listener
-	for alias := range aliasMap {
-		listeners = append(listeners, MakeHTTPListener("listener_0", alias, "0.0.0.0", 9000))
-	}
+	// for alias := range aliasMap {
+	listeners = append(listeners, MakeHTTPListener("listener_0", "listener_0", "0.0.0.0", 9000))
+	// }
 	return listeners, nil
 }
 
@@ -171,7 +175,7 @@ func MakeCluster(clusterName string) *cluster.Cluster {
 
 func makeEDSCluster(alias string) *cluster.Cluster_EdsClusterConfig {
 	return &cluster.Cluster_EdsClusterConfig{
-		EdsConfig: makeConfigSource(alias),
+		EdsConfig: makeConfigSource("xds_cluster"),
 	}
 }
 
@@ -214,7 +218,7 @@ func MakeRoute(routes []string) *route.RouteConfiguration {
 			//Name: r.Name,
 			Match: &route.RouteMatch{
 				PathSpecifier: &route.RouteMatch_Prefix{
-					Prefix: "/",
+					Prefix: "/solr/" + r,
 				},
 			},
 			Action: &route.Route_Route{
@@ -237,15 +241,15 @@ func MakeRoute(routes []string) *route.RouteConfiguration {
 	}
 }
 
-func MakeHTTPListener(_, route, address string, port uint32) *listener.Listener {
+func MakeHTTPListener(listenerName, route, address string, port uint32) *listener.Listener {
 	// HTTP filter configuration
 	manager := &hcm.HttpConnectionManager{
 		CodecType:  hcm.HttpConnectionManager_AUTO,
 		StatPrefix: "http",
 		RouteSpecifier: &hcm.HttpConnectionManager_Rds{
 			Rds: &hcm.Rds{
-				ConfigSource:    makeConfigSource(route),
-				RouteConfigName: "listener_0",
+				ConfigSource:    makeConfigSource("xds_cluster"),
+				RouteConfigName: route,
 			},
 		},
 		HttpFilters: []*hcm.HttpFilter{{
@@ -258,7 +262,7 @@ func MakeHTTPListener(_, route, address string, port uint32) *listener.Listener 
 	}
 
 	return &listener.Listener{
-		Name: "listener_0",
+		Name: listenerName,
 		Address: &core.Address{
 			Address: &core.Address_SocketAddress{
 				SocketAddress: &core.SocketAddress{
@@ -291,7 +295,7 @@ func makeConfigSource(alias string) *core.ConfigSource {
 			SetNodeOnFirstMessageOnly: true,
 			GrpcServices: []*core.GrpcService{{
 				TargetSpecifier: &core.GrpcService_EnvoyGrpc_{
-					EnvoyGrpc: &core.GrpcService_EnvoyGrpc{ClusterName: "xds_cluster"},
+					EnvoyGrpc: &core.GrpcService_EnvoyGrpc{ClusterName: alias},
 				},
 			}},
 		},
