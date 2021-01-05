@@ -74,7 +74,6 @@ func (es *xdsServer) stream(st grpcStream) error {
 				log.Printf("failed to receive message on stream: %v", err)
 				return
 			} else if in.VersionInfo == "" {
-				log.Printf("received discovery request on stream: %v", in)
 				cla, err := es.locator.CLA()
 				if err != nil {
 					log.Printf("failed to decode locator values : %v", err)

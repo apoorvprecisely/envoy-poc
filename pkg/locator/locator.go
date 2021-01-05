@@ -72,7 +72,6 @@ func (a agent) getAliasMap() (map[string]string, error) {
 	if !ok {
 		return make(map[string]string), nil
 	}
-	log.Println(c)
 	return c, nil
 }
 func (a agent) getCollectionLocations(collection string) ([]string, error) {
@@ -89,7 +88,6 @@ func (a agent) getCollectionLocations(collection string) ([]string, error) {
 	for _, v := range mm[collection].Shards["shard1"].Replicas {
 		locations = append(locations, strings.Trim(strings.Trim(v.BaseUrl, ":8983/solr"), "http://"))
 	}
-	log.Println(locations)
 	return locations, nil
 }
 
@@ -239,7 +237,7 @@ func MakeRoute(routes []string) *route.RouteConfiguration {
 	}
 }
 
-func MakeHTTPListener(listenerName, route, address string, port uint32) *listener.Listener {
+func MakeHTTPListener(_, route, address string, port uint32) *listener.Listener {
 	// HTTP filter configuration
 	manager := &hcm.HttpConnectionManager{
 		CodecType:  hcm.HttpConnectionManager_AUTO,
@@ -260,7 +258,7 @@ func MakeHTTPListener(listenerName, route, address string, port uint32) *listene
 	}
 
 	return &listener.Listener{
-		Name: listenerName,
+		Name: "listener_0",
 		Address: &core.Address{
 			Address: &core.Address_SocketAddress{
 				SocketAddress: &core.SocketAddress{
