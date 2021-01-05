@@ -9,11 +9,11 @@ import (
 
 	"github.com/apoorvprecisely/envoy-poc/internal/hub"
 	"github.com/apoorvprecisely/envoy-poc/pkg/locator"
-	"github.com/apoorvprecisely/envoy-poc/pkg/streamer"
-	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	"github.com/apoorvprecisely/envoy-poc/pkg/xds"
 	"github.com/unbxd/go-base/base/drivers/zook"
 	"github.com/unbxd/go-base/base/endpoint"
 
+	logrus "github.com/sirupsen/logrus"
 	gb_log "github.com/unbxd/go-base/base/log"
 
 	"github.com/unbxd/go-base/base/transport/zk"
@@ -33,7 +33,8 @@ func main() {
 	log.Printf("creating grpc server")
 
 	server = grpc.NewServer()
-	discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, streamer.New(hub, loc))
+	subscription := hub.Subscribe()
+	xds.RegisterServer(xds.NewXdsServer(logrus.New(), subscription, loc, hub), server)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", 8053))
 	if err != nil {
 		log.Fatalf("failed to listen: %v\n", err)
@@ -88,7 +89,12 @@ func createPubEP(hubService hub.Service, locator locator.Service) endpoint.Endpo
 			log.Printf("failed to decode locator values : %v", err)
 			return nil, err
 		}
-		hubService.Publish(&hub.Event{CLA: cla, Clusters: clusters, Routes: routes})
+		listeners, err := locator.Listeners()
+		if err != nil {
+			log.Printf("failed to decode locator values : %v", err)
+			return nil, err
+		}
+		hubService.Publish(&hub.Event{CLA: cla, Clusters: clusters, Routes: routes, Listeners: listeners})
 		if err != nil {
 			return nil, err
 		}

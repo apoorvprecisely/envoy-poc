@@ -16,7 +16,7 @@ services:
       - ./scripts/wait-for-it.sh:/usr/bin/wait-for-it.sh
     command: >
       bash -c '/usr/bin/wait-for-it.sh -h zook1 -p 2181 -t 0; server/scripts/cloud-scripts/zkcli.sh -z zook1:2181/solr -cmd bootstrap -solrhome /opt/solr/server/solr
-      && /opt/solr/bin/solr -c -f -z zook1:2181/solr -Dhost=solr1 -force'
+      && /opt/solr/bin/solr -c -f -z zook1:2181/solr -force'
     depends_on:
       - zook1
   solr2:
@@ -32,7 +32,7 @@ services:
       - ./scripts/wait-for-it.sh:/usr/bin/wait-for-it.sh
     command: >
       bash -c '/usr/bin/wait-for-it.sh -h zook1 -p 2181 -t 0; server/scripts/cloud-scripts/zkcli.sh -z zook1:2181/solr -cmd bootstrap -solrhome /opt/solr/server/solr
-      && /opt/solr/bin/solr -c -f -z zook1:2181/solr -Dhost=solr2 -force'
+      && /opt/solr/bin/solr -c -f -z zook1:2181/solr -force'
     depends_on:
       - zook1
   zook1:

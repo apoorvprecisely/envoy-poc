@@ -4,8 +4,10 @@ import (
 	"log"
 	"sync"
 
-	discovery "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-
+	cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -15,13 +17,13 @@ type Service interface {
 	Size() int
 }
 
-type CLAChan chan *discovery.ClusterLoadAssignment
 type EventChan chan *Event
 
 type Event struct {
-	CLA      []*discovery.ClusterLoadAssignment
-	Clusters []*discovery.Cluster
-	Routes   []*discovery.RouteConfiguration
+	CLA       []*endpoint.ClusterLoadAssignment
+	Clusters  []*cluster.Cluster
+	Routes    []*route.RouteConfiguration
+	Listeners []*listener.Listener
 }
 
 type hub struct {
