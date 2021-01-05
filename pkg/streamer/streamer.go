@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"errors"
+	"log"
 
 	"github.com/apoorvprecisely/envoy-poc/internal/hub"
 	"github.com/apoorvprecisely/envoy-poc/pkg/locator"
@@ -32,5 +33,6 @@ func (s *Service) DeltaAggregatedResources(_ discoverygrpc.AggregatedDiscoverySe
 }
 
 func New(hub hub.Service, locator locator.Service) *Service {
+	log.Printf("created new streamer")
 	return &Service{hub: hub, locator: locator}
 }

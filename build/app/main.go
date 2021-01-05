@@ -7,16 +7,16 @@ import (
 	"net"
 	"time"
 
+	"github.com/apoorvprecisely/envoy-poc/internal/hub"
 	"github.com/apoorvprecisely/envoy-poc/pkg/locator"
 	"github.com/apoorvprecisely/envoy-poc/pkg/streamer"
-	sam_zk "github.com/samuel/go-zookeeper/zk"
+	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	"github.com/unbxd/go-base/base/drivers/zook"
 	"github.com/unbxd/go-base/base/endpoint"
-	gb_log "github.com/unbxd/go-base/base/log"
-	"github.com/unbxd/go-base/base/transport/zk"
 
-	"github.com/apoorvprecisely/envoy-poc/internal/hub"
-	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	gb_log "github.com/unbxd/go-base/base/log"
+
+	"github.com/unbxd/go-base/base/transport/zk"
 
 	"google.golang.org/grpc"
 )
@@ -24,49 +24,53 @@ import (
 var server *grpc.Server
 
 func main() {
-	logger, err := gb_log.NewZapLogger(
-		gb_log.ZapWithLevel("error"),
-		gb_log.ZapWithEncoding("console"),
-		gb_log.ZapWithOutput([]string{"stdout"}),
-	)
+
 	hub := hub.NewHub()
 	loc, err := locator.NewLocator()
 	if err != nil {
 		panic(err)
 	}
-	//add watch
-	zkD := zook.NewZKDriver([]string{"zook1:2181"}, time.Duration(2000)*time.Millisecond, "/solr")
-	err = zkD.Open()
-	if err != nil {
-		panic(err)
-	}
-	_, err = zk.NewConsumer(logger, "/solr/aliases.json", []zk.ConsumerOption{
-		zk.WithZkDriver(zkD),
-		zk.WithEndpointConsumerOption(createPubEP(hub, loc)),
-		zk.WithReconnectOnErrConsumerOption(func(err error) bool {
-			if err == sam_zk.ErrNoNode {
-				return false
-			}
-			return true
-		}),
-		zk.WithDelayOnErrConsumerOption(func(err error) time.Duration {
-			if err != nil {
-				return 1 * time.Second
-			}
-			return 0
-		})}...)
+	log.Printf("creating grpc server")
 
-	if err != nil {
-		panic(err)
-	}
 	server = grpc.NewServer()
 	discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, streamer.New(hub, loc))
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", 8053))
 	if err != nil {
 		log.Fatalf("failed to listen: %v\n", err)
 	}
-	server.Serve(lis)
+	log.Printf("Registered discovery service server")
+	//add watch
+	logger, err := gb_log.NewZapLogger(
+		gb_log.ZapWithLevel("error"),
+		gb_log.ZapWithEncoding("console"),
+		gb_log.ZapWithOutput([]string{"stdout"}),
+	)
+	zkD := zook.NewZKDriver([]string{"zook1:2181"}, time.Duration(2000)*time.Millisecond, "/solr")
+	err = zkD.Open()
+	if err != nil {
+		panic(err)
+	}
+	con, err := zk.NewConsumer(logger, "/solr/aliases.json", []zk.ConsumerOption{
+		zk.WithZkDriver(zkD),
+		zk.WithEndpointConsumerOption(createPubEP(hub, loc))}...)
+
+	if err != nil {
+		panic(err)
+	}
+	go func(zc *zk.Consumer) {
+		err := con.Open()
+		if err != nil {
+			panic(err)
+		}
+	}(con)
+
+	log.Printf("Registered watch")
+	err = server.Serve(lis)
+	if err != nil {
+		panic(err)
+	}
 }
+
 func createPubEP(hubService hub.Service, locator locator.Service) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
 		cla, err := locator.CLA()

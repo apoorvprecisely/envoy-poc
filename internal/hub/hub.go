@@ -56,8 +56,8 @@ func (h *hub) Subscribe() *Subscription {
 }
 
 func (h *hub) Publish(event *Event) {
-	log.Println("incoming event")
 	h.subscriptions.Range(func(id, subscription interface{}) bool {
+		log.Println("incoming event, forwarded to subscriber")
 		subscription.(*Subscription).Accept(event)
 		return true
 	})

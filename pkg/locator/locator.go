@@ -2,6 +2,7 @@ package locator
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -15,23 +16,23 @@ import (
 
 type (
 	Collection struct {
-		Shards            map[string]*Shard `mapstructure:"shards"`
+		Shards            map[string]*Shard `json:"shards"`
 		ReplicationFactor string            `mapstructure:"replicationFactor"`
 	}
 
 	Shard struct {
-		Name     string              `mapstructure:"name"`
-		Range    string              `mapstructure:"range"`
-		State    string              `mapstructure:"state"`
-		Replicas map[string]*Replica `mapstructure:"replicas"`
+		Name     string              `json:"name"`
+		Range    string              `json:"range"`
+		State    string              `json:"state"`
+		Replicas map[string]*Replica `json:"replicas"`
 	}
 
 	Replica struct {
-		Core     string `mapstructure:"core"`
-		Leader   string `mapstructure:"leader"`
-		BaseUrl  string `mapstructure:"base_url"`
-		NodeName string `mapstructure:"node_name"`
-		State    string `mapstructure:"state"`
+		Core     string `json:"core"`
+		Leader   string `json:"leader"`
+		BaseUrl  string `json:"base_url"`
+		NodeName string `json:"node_name"`
+		State    string `json:"state"`
 	}
 )
 
@@ -65,6 +66,7 @@ func (a agent) getAliasMap() (map[string]string, error) {
 	if !ok {
 		return make(map[string]string), nil
 	}
+	log.Println(c)
 	return c, nil
 }
 func (a agent) getCollectionLocations(collection string) ([]string, error) {
@@ -81,6 +83,7 @@ func (a agent) getCollectionLocations(collection string) ([]string, error) {
 	for _, v := range mm[collection].Shards["shard1"].Replicas {
 		locations = append(locations, strings.Trim(strings.Trim(v.BaseUrl, ":8983/solr"), "http://"))
 	}
+	log.Println(locations)
 	return locations, nil
 }
 
@@ -204,6 +207,8 @@ func NewLocator() (Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("created new locator")
+
 	return &agent{
 		driver:            zkD,
 		enableHealthCheck: false,

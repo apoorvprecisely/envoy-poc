@@ -22,6 +22,7 @@ type subscriptionStream struct {
 
 func (es *subscriptionStream) Stream() error {
 	var terminate chan bool
+	log.Printf("opened stream")
 
 	go func() {
 		for {
@@ -34,7 +35,6 @@ func (es *subscriptionStream) Stream() error {
 				return
 			} else if in.VersionInfo == "" {
 				log.Printf("received discovery request on stream: %v", in)
-				// request being written, how no clue,based on this a DiscoveryResponse is being written
 				cla, err := es.locator.CLA()
 				if err != nil {
 					log.Printf("failed to decode locator values : %v", err)
@@ -59,6 +59,8 @@ func (es *subscriptionStream) Stream() error {
 
 	go func() {
 		responseStream := NewDiscoveryResponseStream(es.stream)
+		log.Printf("created new discovery response stream")
+
 		// this is where on getting an event DiscoveryResponse object is written on grpc
 		for {
 			select {
