@@ -69,32 +69,75 @@ func (es *xdsServer) stream(st grpcStream) error {
 			if err == io.EOF {
 				return
 			}
-			fmt.Println("type:" + in.GetTypeUrl() + " resources:" + strings.Join(in.GetResourceNames(), ","))
 			if err != nil {
 				log.Printf("failed to receive message on stream: %v", err)
 				return
 			} else if in.VersionInfo == "" {
-				cla, err := es.locator.CLA()
+				fmt.Println("Sending Requested :: type:" + in.GetTypeUrl() + " resources:" + strings.Join(in.ResourceNames, ","))
+				cla, err := es.locator.CLA(in.ResourceNames)
 				if err != nil {
 					log.Printf("failed to decode locator values : %v", err)
 					return
 				}
-				clusters, err := es.locator.Clusters()
+				clusters, err := es.locator.Clusters(in.ResourceNames)
 				if err != nil {
 					log.Printf("failed to decode locator values : %v", err)
 					return
 				}
-				routes, err := es.locator.Routes()
+				routes, err := es.locator.Routes(in.ResourceNames)
 				if err != nil {
 					log.Printf("failed to decode locator values : %v", err)
 					return
 				}
-				listeners, err := es.locator.Listeners()
+				listeners, err := es.locator.Listeners(in.ResourceNames)
 				if err != nil {
 					log.Printf("failed to decode locator values : %v", err)
 					return
 				}
-				es.hub.Publish(&hub.Event{CLA: cla, Clusters: clusters, Routes: routes, Listeners: listeners})
+				if strings.Contains(in.GetTypeUrl(), "ClusterLoadAssignment") {
+					//cla
+					resp, err := GetEDS(cla)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+				}
+				if strings.Contains(in.GetTypeUrl(), ".config.cluster.v3.Cluster") {
+					//clusters
+					resp, err := GetClusters(clusters)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+				}
+				if strings.Contains(in.GetTypeUrl(), "RouteConfiguration") {
+
+					//routes
+					resp, err := GetRoutes(routes)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+				}
+				if strings.Contains(in.GetTypeUrl(), "fig.listener.v3.Listener") {
+					resp, err := GetListeners(listeners)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+				}
 			} else {
 				log.Printf("received ACK on stream: %v", in)
 			}
@@ -110,7 +153,8 @@ func (es *xdsServer) stream(st grpcStream) error {
 					log.Printf("Stopped listening to events channel since it has been closed")
 					return
 				}
-				if e != nil {
+				fmt.Println("Sending All :: type:" + e.Type + " resources:" + strings.Join(e.Resources, ","))
+				if e != nil && strings.Contains(e.Type, "ClusterLoadAssignment") {
 					//cla
 					resp, err := GetEDS(e.CLA)
 					if err != nil {
@@ -120,8 +164,10 @@ func (es *xdsServer) stream(st grpcStream) error {
 					if err != nil {
 						log.Printf("failed to decode locator values : %v", err)
 					}
+				}
+				if e != nil && strings.Contains(e.Type, ".config.cluster.v3.Cluster") {
 					//clusters
-					resp, err = GetClusters(e.Clusters)
+					resp, err := GetClusters(e.Clusters)
 					if err != nil {
 						log.Printf("failed to decode locator values : %v", err)
 					}
@@ -129,8 +175,41 @@ func (es *xdsServer) stream(st grpcStream) error {
 					if err != nil {
 						log.Printf("failed to decode locator values : %v", err)
 					}
+				}
+				if e != nil && strings.Contains(e.Type, "RouteConfiguration") {
+
 					//routes
-					resp, err = GetRoutes(e.Routes)
+					resp, err := GetRoutes(e.Routes)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+				}
+				if e != nil && strings.Contains(e.Type, "fig.listener.v3.Listener") {
+					resp, err := GetListeners(e.Listeners)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+				}
+				if e != nil && strings.Compare("", e.Type) == 0 {
+					//clusters
+					resp, err := GetClusters(e.Clusters)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					//cla
+					resp, err = GetEDS(e.CLA)
 					if err != nil {
 						log.Printf("failed to decode locator values : %v", err)
 					}
@@ -140,6 +219,16 @@ func (es *xdsServer) stream(st grpcStream) error {
 					}
 					//listeners
 					resp, err = GetListeners(e.Listeners)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+					err = st.Send(resp)
+					if err != nil {
+						log.Printf("failed to decode locator values : %v", err)
+					}
+
+					//routes
+					resp, err = GetRoutes(e.Routes)
 					if err != nil {
 						log.Printf("failed to decode locator values : %v", err)
 					}

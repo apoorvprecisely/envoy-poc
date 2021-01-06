@@ -3,6 +3,7 @@ package locator
 import (
 	"encoding/json"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,10 +43,10 @@ type (
 )
 
 type Service interface {
-	Clusters() ([]*cluster.Cluster, error)
-	Routes() ([]*route.RouteConfiguration, error)
-	CLA() ([]*endpoint.ClusterLoadAssignment, error)
-	Listeners() ([]*listener.Listener, error)
+	Clusters(list []string) ([]*cluster.Cluster, error)
+	Routes(list []string) ([]*route.RouteConfiguration, error)
+	CLA(list []string) ([]*endpoint.ClusterLoadAssignment, error)
+	Listeners(list []string) ([]*listener.Listener, error)
 }
 
 const (
@@ -86,12 +87,12 @@ func (a agent) getCollectionLocations(collection string) ([]string, error) {
 	}
 	var locations []string
 	for _, v := range mm[collection].Shards["shard1"].Replicas {
-		locations = append(locations, strings.Trim(strings.Trim(v.BaseUrl, ":8983/solr"), "http://"))
+		locations = append(locations, strings.Trim(strings.Trim(v.BaseUrl, "/solr"), "http://"))
 	}
 	return locations, nil
 }
 
-func (a *agent) CLA() ([]*endpoint.ClusterLoadAssignment, error) {
+func (a *agent) CLA(list []string) ([]*endpoint.ClusterLoadAssignment, error) {
 	aliasMap, err := a.getAliasMap()
 	if err != nil {
 		return nil, err
@@ -102,25 +103,48 @@ func (a *agent) CLA() ([]*endpoint.ClusterLoadAssignment, error) {
 		if err != nil {
 			return nil, err
 		}
-		cLAs = append(cLAs, MakeEndpoint(alias, ep))
+		if contains(list, alias) || empty(list) {
+			cLAs = append(cLAs, MakeEndpoint(alias, ep))
+		}
 	}
 	return cLAs, nil
 }
-
-func (a *agent) Clusters() ([]*cluster.Cluster, error) {
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if strings.Compare(a, e) == 0 {
+			return true
+		}
+	}
+	return false
+}
+func empty(s []string) bool {
+	if len(s) < 1 {
+		return true
+	}
+	if len(s) > 0 {
+		for _, v := range s {
+			if strings.Compare("", v) == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+func (a *agent) Clusters(list []string) ([]*cluster.Cluster, error) {
 	aliasMap, err := a.getAliasMap()
 	if err != nil {
 		return nil, err
 	}
 	var clusters []*cluster.Cluster
 	for alias := range aliasMap {
-		clusters = append(clusters, MakeCluster(alias))
-
+		if contains(list, alias) || empty(list) {
+			clusters = append(clusters, MakeCluster(alias))
+		}
 	}
 	return clusters, nil
 }
 
-func (a *agent) Routes() ([]*route.RouteConfiguration, error) {
+func (a *agent) Routes(_ []string) ([]*route.RouteConfiguration, error) {
 	aliasMap, err := a.getAliasMap()
 	if err != nil {
 		return nil, err
@@ -128,7 +152,9 @@ func (a *agent) Routes() ([]*route.RouteConfiguration, error) {
 	var routes []string
 	var routesC []*route.RouteConfiguration
 	for alias := range aliasMap {
+		// if contains(list, alias) || empty(list) {
 		routes = append(routes, alias)
+		// }
 	}
 	routesC = append(routesC, MakeRoute(routes))
 	return routesC, nil
@@ -139,7 +165,7 @@ func (a *agent) Routes() ([]*route.RouteConfiguration, error) {
 test_write: envoy.config.core.v3.ApiConfigSource must have a statically defined non-EDS cluster: 'test_write' does not exist, was added via api, or is an EDS cluster
 
 */
-func (a *agent) Listeners() ([]*listener.Listener, error) {
+func (a *agent) Listeners(list []string) ([]*listener.Listener, error) {
 	var listeners []*listener.Listener
 	// for alias := range aliasMap {
 	listeners = append(listeners, MakeHTTPListener("listener_0", "listener_0", "0.0.0.0", 9000))
@@ -183,6 +209,8 @@ func MakeEndpoint(clusterName string, eps []string) *endpoint.ClusterLoadAssignm
 	var endpoints []*endpoint.LbEndpoint
 
 	for _, e := range eps {
+		parts := strings.Split(e, ":")
+		port, _ := strconv.Atoi(parts[1])
 		endpoints = append(endpoints, &endpoint.LbEndpoint{
 			HostIdentifier: &endpoint.LbEndpoint_Endpoint{
 				Endpoint: &endpoint.Endpoint{
@@ -190,9 +218,9 @@ func MakeEndpoint(clusterName string, eps []string) *endpoint.ClusterLoadAssignm
 						Address: &core.Address_SocketAddress{
 							SocketAddress: &core.SocketAddress{
 								Protocol: core.SocketAddress_TCP,
-								Address:  e,
+								Address:  "127.0.0.1",
 								PortSpecifier: &core.SocketAddress_PortValue{
-									PortValue: 8983,
+									PortValue: uint32(port),
 								},
 							},
 						},

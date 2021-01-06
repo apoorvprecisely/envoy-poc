@@ -20,6 +20,8 @@ type Service interface {
 type EventChan chan *Event
 
 type Event struct {
+	Type      string
+	Resources []string
 	CLA       []*endpoint.ClusterLoadAssignment
 	Clusters  []*cluster.Cluster
 	Routes    []*route.RouteConfiguration

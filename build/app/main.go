@@ -74,27 +74,27 @@ func main() {
 
 func createPubEP(hubService hub.Service, locator locator.Service) endpoint.Endpoint {
 	return func(_ context.Context, request interface{}) (interface{}, error) {
-		cla, err := locator.CLA()
+		cla, err := locator.CLA([]string{""})
 		if err != nil {
 			log.Printf("failed to decode locator values : %v", err)
 			return nil, err
 		}
-		clusters, err := locator.Clusters()
+		clusters, err := locator.Clusters([]string{""})
 		if err != nil {
 			log.Printf("failed to decode locator values : %v", err)
 			return nil, err
 		}
-		routes, err := locator.Routes()
+		routes, err := locator.Routes([]string{""})
 		if err != nil {
 			log.Printf("failed to decode locator values : %v", err)
 			return nil, err
 		}
-		listeners, err := locator.Listeners()
+		listeners, err := locator.Listeners([]string{""})
 		if err != nil {
 			log.Printf("failed to decode locator values : %v", err)
 			return nil, err
 		}
-		hubService.Publish(&hub.Event{CLA: cla, Clusters: clusters, Routes: routes, Listeners: listeners})
+		hubService.Publish(&hub.Event{Type: "", Resources: []string{""}, CLA: cla, Clusters: clusters, Routes: routes, Listeners: listeners})
 		if err != nil {
 			return nil, err
 		}
